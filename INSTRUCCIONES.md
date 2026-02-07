@@ -7,7 +7,7 @@
 cd ~/Descargas && tar -xzvf apkgithut-2.0.tar.gz && cd apkgithut-2.0
 
 # 2. Ejecutar configuración automática
-chmod +x setup-github.sh && ./setup-github.sh vbn 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
+chmod +x setup-github.sh && ./setup-github.sh vbn GITHUB_TOKEN_AQUI
 ```
 
 **Listo!** Ahora espera 10-20 minutos y descarga tu APK desde:
@@ -35,7 +35,7 @@ cd apkgithut-2.0
 
 ```bash
 chmod +x setup-github.sh
-./setup-github.sh vbn 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
+./setup-github.sh vbn GITHUB_TOKEN_AQUI
 ```
 
 ### Paso 4: Esperar Compilación
@@ -80,7 +80,7 @@ git push origin main
 
 ### Error de permisos
 ```bash
-git remote set-url origin https://voeseboin-sys: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@github.com/voeseboin-sys/vbn.git
+git remote set-url origin https://voeseboin-sys:GITHUB_TOKEN_AQUI@github.com/voeseboin-sys/vbn.git
 git push origin main
 ```
 

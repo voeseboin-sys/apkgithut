@@ -47,7 +47,7 @@ cd apkgithut-2.0
 
 # Ejecutar script de configuración
 chmod +x setup-github.sh
-./setup-github.sh vbn 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
+./setup-github.sh vbn GITHUB_TOKEN_AQUI
 ```
 
 ### 2. Esperar y Descargar APK
@@ -69,7 +69,7 @@ git config --global user.email "voeseboin@gmail.com"
 git config --global user.name "voeseboin-sys"
 
 git init
-git remote add origin https://voeseboin-sys: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@github.com/voeseboin-sys/vbn.git
+git remote add origin https://voeseboin-sys:GITHUB_TOKEN_AQUI@github.com/voeseboin-sys/vbn.git
 ```
 
 ### Paso 2: Subir Código
@@ -179,7 +179,7 @@ Cada push a `main` crea automáticamente un Release con la APK:
 ### Error: "Permission denied" al hacer push
 
 ```bash
-git remote set-url origin https://voeseboin-sys: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@github.com/voeseboin-sys/vbn.git
+git remote set-url origin https://voeseboin-sys:GITHUB_TOKEN_AQUI@github.com/voeseboin-sys/vbn.git
 ```
 
 ### Error: "Build failed" en GitHub Actions

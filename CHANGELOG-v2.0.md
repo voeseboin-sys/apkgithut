@@ -139,7 +139,7 @@ tar -xzvf apkgithut-2.0.tar.gz
 # 3. Configurar
 cd apkgithut-2.0
 chmod +x setup-github.sh
-./setup-github.sh vbn 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
+./setup-github.sh vbn GITHUB_TOKEN_AQUI
 ```
 
 ### Opción 2: Reemplazar Solo Archivos Críticos

@@ -7,7 +7,7 @@
 #   ./setup-github.sh <NOMBRE_REPO> <TOKEN_GITHUB>
 #
 # EJEMPLO:
-#   ./setup-github.sh vbn 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
+#   ./setup-github.sh vbn GITHUB_TOKEN_AQUI
 # =============================================================================
 
 # Colores para output
@@ -73,7 +73,7 @@ if [ $# -lt 2 ]; then
     echo "Uso: ./setup-github.sh <NOMBRE_REPO> <TOKEN_GITHUB>"
     echo ""
     echo "Ejemplo:"
-    echo "  ./setup-github.sh vbn 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"
+    echo "  ./setup-github.sh vbn GITHUB_TOKEN_AQUI"
     echo ""
     exit 1
 fi
