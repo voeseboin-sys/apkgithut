@@ -17,12 +17,11 @@ jobs:
       with:
         python-version: '3.10'
 
-    - name: Install system dependencies
+    - name: Install ONLY essential system dependencies
       run: |
         sudo apt-get update
         sudo apt-get install -y \
           build-essential \
-          ccache \
           git \
           libtinfo6 \
           ncurses-bin \
@@ -32,17 +31,8 @@ jobs:
           zip \
           unzip \
           openjdk-17-jdk \
-          autoconf \
-          libtool \
-          pkg-config \
-          zlib1g-dev \
-          libncurses5-dev \
-          libncursesw5-dev \
-          libtcl8.6 \
-          libsqlite3-0 \
-          libsqlite3-dev \
-          libc6-dev \
-          wget
+          wget \
+          curl
 
     - name: Install Buildozer and Python dependencies
       run: |
@@ -51,79 +41,78 @@ jobs:
         pip install buildozer==1.5.0
         pip install -r requirements.txt
 
-    - name: Build APK with Buildozer
+    - name: Configure Buildozer to auto-download Android SDK
       run: |
-        echo "=== CONFIGURANDO ENTORNO ==="
-        export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+        echo "=== CONFIGURANDO BUILDIOZER ==="
         
-        echo "=== VERIFICANDO buildozer.spec ==="
-        ls -la buildozer.spec
-        echo ""
-        echo "Requisitos configurados:"
-        grep "requirements =" buildozer.spec
+        # Asegurar que buildozer.spec tenga configuraciones correctas
+        if grep -q "android.sdk_path" buildozer.spec; then
+          echo "⚠️ Eliminando android.sdk_path para que Buildozer descargue automáticamente"
+          sed -i '/android.sdk_path/d' buildozer.spec
+        fi
         
-        echo "=== INICIANDO COMPILACIÓN ==="
-        # Compilar APK - NO usar buildozer init
-        buildozer -v android debug
+        if grep -q "android.ndk_path" buildozer.spec; then
+          echo "⚠️ Eliminando android.ndk_path para que Buildozer descargue automáticamente"
+          sed -i '/android.ndk_path/d' buildozer.spec
+        fi
         
-        echo "=== BUSCANDO APK GENERADA ==="
-        find . -name "*.apk" -type f 2>/dev/null
+        # Agregar configuración para auto-descarga si no existe
+        if ! grep -q "android.accept_license" buildozer.spec; then
+          echo "" >> buildozer.spec
+          echo "# Auto-accept Android licenses" >> buildozer.spec
+          echo "android.accept_license = True" >> buildozer.spec
+        fi
+        
+        echo "buildozer.spec actualizado:"
+        grep -E "(android\\.|requirements)" buildozer.spec
 
-    - name: Prepare APK for upload
+    - name: Build APK with Buildozer (LET IT DOWNLOAD EVERYTHING)
       run: |
-        echo "=== PREPARANDO APK PARA UPLOAD ==="
+        echo "=== BUILDIOZER DESCARGARÁ TODO AUTOMÁTICAMENTE ==="
         
-        # Buscar APK en todas las ubicaciones posibles
-        mkdir -p apk_output
+        # Configurar Java
+        export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+        echo "JAVA_HOME: $JAVA_HOME"
         
-        # Patrones de búsqueda
-        PATTERNS=(
-          "bin/*.apk"
-          ".buildozer/android/platform/build-*/*/bin/*.apk"
-          ".buildozer/android/platform/app/build/outputs/apk/debug/*.apk"
-          ".buildozer/android/platform/build/dists/*/build/outputs/apk/debug/*.apk"
-        )
+        # Limpiar cache anterior si existe
+        rm -rf ~/.buildozer 2>/dev/null || true
         
-        APK_FOUND=false
+        # Compilar con tiempo extendido y más verbosidad
+        timeout 1800 buildozer -v android debug 2>&1 | tee build.log
         
-        for pattern in "${PATTERNS[@]}"; do
-          for apk in $pattern; do
-            if [ -f "$apk" ]; then
-              echo "✅ Encontrada: $apk"
-              cp "$apk" apk_output/
-              APK_FOUND=true
-            fi
-          done
+        # Si falla, mostrar últimos logs
+        if [ ${PIPESTATUS[0]} -ne 0 ]; then
+          echo "=== ÚLTIMAS 100 LÍNEAS DEL LOG ==="
+          tail -100 build.log
+          
+          echo "=== BUSCANDO ERRORES ESPECÍFICOS ==="
+          grep -i "error\|fail\|not found\|aidl" build.log | tail -20
+        fi
+
+    - name: Find and Prepare APK
+      run: |
+        echo "=== BUSCANDO APK ==="
+        
+        # Buscar APK en ubicaciones de Buildozer
+        find ~/.buildozer -name "*.apk" -type f 2>/dev/null | while read apk; do
+          echo "📦 APK encontrada: $apk"
+          mkdir -p bin
+          cp "$apk" bin/
         done
         
-        # Buscar recursivamente si no se encontró
-        if [ "$APK_FOUND" = false ]; then
-          echo "Buscando APK recursivamente..."
-          find . -name "*.apk" -type f -exec cp {} apk_output/ \; 2>/dev/null || true
-        fi
+        # También buscar en directorio actual
+        find . -name "*.apk" -type f 2>/dev/null | while read apk; do
+          echo "📦 APK local: $apk"
+          mkdir -p bin
+          cp "$apk" bin/
+        done
         
-        # Mostrar lo que hay en apk_output
-        echo "Contenido de apk_output/:"
-        ls -la apk_output/ || echo "apk_output vacío"
-        
-        # Si no hay nada, crear archivo dummy para debug
-        if [ ! "$(ls -A apk_output/ 2>/dev/null)" ]; then
-          echo "⚠️ No se encontró APK, creando archivo de debug"
-          echo "APK no generada - Revisar logs de Buildozer" > apk_output/DEBUG_NO_APK.txt
-        fi
+        echo "=== CONTENIDO DE bin/ ==="
+        ls -la bin/ 2>/dev/null || echo "bin/ vacío - No se generó APK"
 
     - name: Upload APK
       uses: actions/upload-artifact@v4
       with:
         name: apk-debug
-        path: apk_output/*
+        path: bin/*.apk
         if-no-files-found: warn
-
-    - name: Show build logs on failure
-      if: failure()
-      run: |
-        echo "=== LOGS DE ERROR ==="
-        find .buildozer -name "*.log" -type f | head -5 | while read log; do
-          echo "=== $log ==="
-          tail -100 "$log"
-        done
