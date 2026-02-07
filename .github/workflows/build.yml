@@ -44,35 +44,40 @@ jobs:
           libc6-dev \
           wget
 
-    - name: Install Android SDK
+    - name: Install Android SDK (FIXED VERSION)
       run: |
-        # Crear directorios
-        mkdir -p android-sdk
-        cd android-sdk
+        echo "=== INSTALANDO ANDROID SDK ==="
         
+        # Método SIMPLE y FUNCIONAL
         # Descargar Android Command Line Tools
         wget -q https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip
-        unzip -q commandlinetools-linux-*.zip
-        mkdir -p cmdline-tools
-        mv cmdline-tools cmdline-tools/latest
+        
+        # Descomprimir en directorio temporal
+        unzip -q commandlinetools-linux-*.zip -d android-cmdline-tools
+        
+        # Crear estructura de directorios requerida
+        mkdir -p android-sdk/cmdline-tools
+        mv android-cmdline-tools/cmdline-tools android-sdk/cmdline-tools/latest
         
         # Configurar entorno
-        echo "ANDROID_SDK_ROOT=$(pwd)" >> $GITHUB_ENV
-        echo "ANDROID_HOME=$(pwd)" >> $GITHUB_ENV
-        echo "$(pwd)/cmdline-tools/latest/bin" >> $GITHUB_PATH
+        echo "ANDROID_SDK_ROOT=$PWD/android-sdk" >> $GITHUB_ENV
+        echo "ANDROID_HOME=$PWD/android-sdk" >> $GITHUB_ENV
+        echo "$PWD/android-sdk/cmdline-tools/latest/bin" >> $GITHUB_PATH
         
         # Aceptar licencias
-        mkdir -p licenses
-        echo "24333f8a63b6825ea9c5514f83c2829b004d1fee" > licenses/android-sdk-license
-        echo "84831b9409646a918e30573bab4c9c91346d8abd" > licenses/android-sdk-preview-license
+        mkdir -p android-sdk/licenses
+        echo "24333f8a63b6825ea9c5514f83c2829b004d1fee" > android-sdk/licenses/android-sdk-license
+        echo "84831b9409646a918e30573bab4c9c91346d8abd" > android-sdk/licenses/android-sdk-preview-license
         
-        # Instalar componentes
-        yes | ./cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null 2>&1
-        ./cmdline-tools/latest/bin/sdkmanager --install "platform-tools" "platforms;android-33" "build-tools;34.0.0"
+        # Instalar componentes de Android
+        echo "Instalando Android SDK components..."
+        yes | android-sdk/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null 2>&1
+        android-sdk/cmdline-tools/latest/bin/sdkmanager --install "platform-tools" "platforms;android-33" "build-tools;34.0.0"
         
-        # Verificar
-        echo "=== Android SDK instalado ==="
-        ls -la build-tools/34.0.0/
+        # Verificar instalación
+        echo "=== VERIFICACIÓN ==="
+        ls -la android-sdk/build-tools/34.0.0/
+        echo "✅ Android SDK instalado correctamente"
 
     - name: Install Python dependencies
       run: |
@@ -85,6 +90,7 @@ jobs:
       env:
         JAVA_HOME: /usr/lib/jvm/java-17-openjdk-amd64
       run: |
+        echo "=== COMPILANDO APK ==="
         buildozer -v android debug
 
     - name: Upload APK
