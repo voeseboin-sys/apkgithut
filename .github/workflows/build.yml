@@ -1,291 +1,100 @@
-# =============================================================================
-# GitHub Actions Workflow - Build Android APK v2.0
-# Repositorio: voeseboin-sys/vbn (o el repositorio actual)
-# Versión corregida: Compatible con Ubuntu 24.04, KivyMD 1.2.0, Android SDK
-# =============================================================================
-
-name: Build Android APK v2.0
+name: Build Android APK
 
 on:
   push:
-    branches: [ main, master ]
-  pull_request:
-    branches: [ main, master ]
-  workflow_dispatch:
-    inputs:
-      build_type:
-        description: 'Tipo de build'
-        required: true
-        default: 'debug'
-        type: choice
-        options:
-          - debug
-          - release
-
-env:
-  PYTHON_VERSION: '3.10'
-  JAVA_VERSION: '17'
-  ANDROID_API: '33'
-  BUILD_TOOLS_VERSION: '34.0.0'
+    branches: [ main ]
 
 jobs:
   build:
-    runs-on: ubuntu-latest
-    timeout-minutes: 90
-    
+    runs-on: ubuntu-24.04
+
     steps:
-    # =========================================================================
-    # PASO 1: Checkout del código (v4 - NO DEPRECADO)
-    # =========================================================================
     - name: Checkout repository
       uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
       with:
-        fetch-depth: 0
-    
-    # =========================================================================
-    # PASO 2: Configurar Python (v4 - NO DEPRECADO)
-    # =========================================================================
-    - name: Set up Python ${{ env.PYTHON_VERSION }}
-      uses: actions/setup-python@v5
-      with:
-        python-version: ${{ env.PYTHON_VERSION }}
-    
-    # =========================================================================
-    # PASO 3: Configurar Java
-    # =========================================================================
-    - name: Set up JDK ${{ env.JAVA_VERSION }}
-      uses: actions/setup-java@v4
-      with:
-        java-version: ${{ env.JAVA_VERSION }}
-        distribution: 'temurin'
-    
-    # =========================================================================
-    # PASO 4: Cache de dependencias (v4 - NO DEPRECADO)
-    # =========================================================================
-    - name: Cache Buildozer and dependencies
-      uses: actions/cache@v4
-      with:
-        path: |
-          ~/.buildozer
-          ~/.gradle
-          ~/.android
-          android-sdk
-        key: ${{ runner.os }}-buildozer-v2-${{ hashFiles('requirements.txt', 'buildozer.spec') }}
-        restore-keys: |
-          ${{ runner.os }}-buildozer-v2-
-    
-    # =========================================================================
-    # PASO 5: Instalar dependencias del SISTEMA (CORREGIDO para Ubuntu 24.04)
-    # =========================================================================
-    - name: Install system dependencies
+        python-version: '3.10'
+
+    - name: Install system dependencies (Ubuntu 24.04 fix)
       run: |
-        echo "=== Actualizando repositorios ==="
         sudo apt-get update
-        
-        echo "=== Instalando dependencias del sistema ==="
-        sudo apt-get install -y --no-install-recommends \
+        sudo apt-get install -y \
           build-essential \
           ccache \
           git \
+          libtinfo6 \
+          ncurses-bin \
           libssl-dev \
           python3-pip \
           python3-venv \
           zip \
           unzip \
-          openjdk-${{ env.JAVA_VERSION }}-jdk \
+          openjdk-17-jdk \
           autoconf \
           libtool \
           pkg-config \
           zlib1g-dev \
           libncurses5-dev \
           libncursesw5-dev \
-          libtinfo6 \
-          ncurses-bin \
+          libtcl8.6 \
           libsqlite3-0 \
           libsqlite3-dev \
           libc6-dev \
           wget \
-          curl \
-          file
-        
-        echo "=== Verificando instalaciones ==="
-        python3 --version
-        java -version
-        which ccache
-    
-    # =========================================================================
-    # PASO 6: Instalar Android SDK (CORREGIDO - sin 'yes | sdkmanager')
-    # =========================================================================
-    - name: Setup Android SDK
+          curl
+
+    - name: Install Android SDK and Build-Tools
       run: |
-        echo "=== Configurando Android SDK ==="
-        export ANDROID_SDK_ROOT=$PWD/android-sdk
-        export ANDROID_HOME=$ANDROID_SDK_ROOT
+        # Crear directorio para Android SDK
+        mkdir -p $HOME/android-sdk
         
-        # Crear directorio del SDK
-        mkdir -p $ANDROID_SDK_ROOT/cmdline-tools
+        # Descargar Command Line Tools
+        wget -q https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip
+        unzip -q commandlinetools-linux-*.zip -d $HOME/android-sdk
+        mv $HOME/android-sdk/cmdline-tools $HOME/android-sdk/cmdline-tools/latest
         
-        # Descargar command line tools (versión estable)
-        if [ ! -d "$ANDROID_SDK_ROOT/cmdline-tools/latest" ]; then
-          echo "Descargando Android SDK Command Line Tools..."
-          wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -O cmdline-tools.zip
-          unzip -q cmdline-tools.zip -d $ANDROID_SDK_ROOT/cmdline-tools/
-          mv $ANDROID_SDK_ROOT/cmdline-tools/cmdline-tools $ANDROID_SDK_ROOT/cmdline-tools/latest
-          rm cmdline-tools.zip
-        fi
+        # Configurar variables de entorno
+        echo "ANDROID_SDK_ROOT=$HOME/android-sdk" >> $GITHUB_ENV
+        echo "ANDROID_HOME=$HOME/android-sdk" >> $GITHUB_ENV
+        echo "$HOME/android-sdk/cmdline-tools/latest/bin" >> $GITHUB_PATH
         
-        # Agregar al PATH
-        export PATH=$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools:$PATH
-        
-        # Crear directorio de licencias
-        mkdir -p $ANDROID_SDK_ROOT/licenses
-        
-        # Aceptar licencias automáticamente (método sin interacción)
-        echo "24333f8a63b6825ea9c5514f83c2829b004d1fee" > $ANDROID_SDK_ROOT/licenses/android-sdk-license
-        echo "84831b9409646a918e30573bab4c9c91346d8abd" > $ANDROID_SDK_ROOT/licenses/android-sdk-preview-license
-        echo "d56f5187479451eabf01fb78af6dfcb131a6481e" > $ANDROID_SDK_ROOT/licenses/android-sdk-license
-        echo "504667f4c0de7af1a06de9f4b1727b84351f2910" > $ANDROID_SDK_ROOT/licenses/android-sdk-license
+        # Aceptar licencias automáticamente
+        mkdir -p $HOME/android-sdk/licenses
+        echo "24333f8a63b6825ea9c5514f83c2829b004d1fee" > $HOME/android-sdk/licenses/android-sdk-license
+        echo "84831b9409646a918e30573bab4c9c91346d8abd" > $HOME/android-sdk/licenses/android-sdk-preview-license
         
         # Instalar componentes necesarios
-        echo "=== Instalando Android SDK components ==="
-        sdkmanager --sdk_root=$ANDROID_SDK_ROOT "platform-tools"
-        sdkmanager --sdk_root=$ANDROID_SDK_ROOT "platforms;android-${{ env.ANDROID_API }}"
-        sdkmanager --sdk_root=$ANDROID_SDK_ROOT "build-tools;${{ env.BUILD_TOOLS_VERSION }}"
+        $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager --install "platform-tools" "platforms;android-33" "build-tools;34.0.0" --sdk_root=$HOME/android-sdk
         
         # Verificar instalación
         echo "=== Verificando instalación ==="
-        ls -la $ANDROID_SDK_ROOT/build-tools/${{ env.BUILD_TOOLS_VERSION }}/
-        which aidl || echo "aidl location: $(find $ANDROID_SDK_ROOT -name aidl 2>/dev/null | head -1)"
-        
-        # Exportar variables para siguientes pasos
-        echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
-        echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
-        echo "PATH=$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools:$ANDROID_SDK_ROOT/build-tools/${{ env.BUILD_TOOLS_VERSION }}:$PATH" >> $GITHUB_PATH
-    
-    # =========================================================================
-    # PASO 7: Instalar dependencias Python
-    # =========================================================================
+        ls -la $HOME/android-sdk/build-tools/34.0.0/
+        echo "AIDL path: $HOME/android-sdk/build-tools/34.0.0/aidl"
+
     - name: Install Python dependencies
       run: |
-        echo "=== Actualizando pip ==="
         python -m pip install --upgrade pip setuptools wheel
-        
-        echo "=== Instalando Cython ==="
         pip install Cython==0.29.36
-        
-        echo "=== Instalando dependencias del proyecto ==="
-        pip install -r requirements.txt
-        
-        echo "=== Instalando Buildozer ==="
         pip install buildozer==1.5.0
-        
-        echo "=== Verificando instalaciones ==="
-        pip list | grep -E "(kivy|kivymd|buildozer|Cython)"
-    
-    # =========================================================================
-    # PASO 8: Compilar APK con Buildozer
-    # =========================================================================
+        pip install -r requirements.txt
+
     - name: Build APK with Buildozer
+      env:
+        ANDROID_SDK_ROOT: $HOME/android-sdk
+        ANDROID_HOME: $HOME/android-sdk
+        JAVA_HOME: /usr/lib/jvm/java-17-openjdk-amd64
       run: |
-        echo "=== Configurando entorno ==="
-        export ANDROID_SDK_ROOT=$PWD/android-sdk
-        export ANDROID_HOME=$ANDROID_SDK_ROOT
-        export PATH=$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools:$ANDROID_SDK_ROOT/build-tools/${{ env.BUILD_TOOLS_VERSION }}:$PATH
-        
-        echo "=== Verificando variables de entorno ==="
-        echo "ANDROID_SDK_ROOT: $ANDROID_SDK_ROOT"
+        echo "=== Variables de entorno ==="
         echo "ANDROID_HOME: $ANDROID_HOME"
         echo "JAVA_HOME: $JAVA_HOME"
+        echo "PATH: $PATH"
         
-        echo "=== Iniciando compilación con Buildozer ==="
-        buildozer android debug
-      timeout-minutes: 60
-    
-    # =========================================================================
-    # PASO 9: Verificar y renombrar APK
-    # =========================================================================
-    - name: Verify and rename APK
-      run: |
-        echo "=== Buscando APK generada ==="
-        ls -la bin/
-        
-        # Renombrar APK con fecha y versión
-        APK_FILE=$(ls bin/*.apk | head -1)
-        if [ -f "$APK_FILE" ]; then
-          NEW_NAME="bin/gestion-fabrica-v2.0-$(date +%Y%m%d-%H%M).apk"
-          cp "$APK_FILE" "$NEW_NAME"
-          echo "=== APK generada exitosamente ==="
-          ls -lh bin/*.apk
-        else
-          echo "=== ERROR: No se encontró APK ==="
-          exit 1
-        fi
-    
-    # =========================================================================
-    # PASO 10: Subir APK como artifact (v4 - NO DEPRECADO)
-    # =========================================================================
-    - name: Upload APK as artifact
+        buildozer -v android debug
+
+    - name: Upload APK
       uses: actions/upload-artifact@v4
       with:
-        name: apk-debug-v2.0
-        path: |
-          bin/*.apk
-        retention-days: 30
-        if-no-files-found: error
-    
-    # =========================================================================
-    # PASO 11: Crear Release (solo en push a main)
-    # =========================================================================
-    - name: Create Release
-      if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
-      uses: softprops/action-gh-release@v1
-      with:
-        tag_name: v2.0.${{ github.run_number }}
-        name: Gestión Fábrica v2.0 Build ${{ github.run_number }}
-        body: |
-          ## 🏭 Gestión Fábrica v2.0 - APK Generada Automáticamente
-          
-          ### 📱 Características
-          - ✅ Modo Landscape (Horizontal)
-          - ✅ Tema Oscuro Material Design 3
-          - ✅ Moneda en Guaraníes (PYG)
-          - ✅ Base de datos SQLite integrada
-          - ✅ Generación de PDF con Share Intent
-          
-          ### 🔧 Compilado con
-          - Python ${{ env.PYTHON_VERSION }}
-          - Kivy 2.2.1
-          - KivyMD 1.2.0
-          - Buildozer 1.5.0
-          - Android API ${{ env.ANDROID_API }}
-          
-          ### 📥 Instalación
-          1. Descarga el archivo APK de abajo
-          2. Transfiérelo a tu dispositivo Android
-          3. Instala y concede permisos de almacenamiento
-          4. ¡Listo!
-          
-          ### 🐛 Correcciones v2.0
-          - Compatibilidad con Ubuntu 24.04
-          - KivyMD versión corregida (1.2.0)
-          - Android SDK Build-Tools instalado correctamente
-          - GitHub Actions actualizados a v4
-          
-          ---
-          **Commit:** ${{ github.sha }}
-          **Fecha:** ${{ github.event.head_commit.timestamp }}
-        files: bin/*.apk
-        draft: false
-        prerelease: false
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-    
-    # =========================================================================
-    # PASO 12: Notificación de éxito (opcional)
-    # =========================================================================
-    - name: Build Success Notification
-      if: success()
-      run: |
-        echo "✅ BUILD COMPLETADO EXITOSAMENTE"
-        echo "📦 APK disponible en: Actions → Artifacts → apk-debug-v2.0"
-        echo "🚀 Release creado automáticamente"
+        name: apk-debug
+        path: bin/*.apk
