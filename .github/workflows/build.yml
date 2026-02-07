@@ -17,7 +17,7 @@ jobs:
       with:
         python-version: '3.10'
 
-    - name: Install system dependencies (Ubuntu 24.04 fix)
+    - name: Install system dependencies
       run: |
         sudo apt-get update
         sudo apt-get install -y \
@@ -28,63 +28,51 @@ jobs:
           ncurses-bin \
           libssl-dev \
           python3-pip \
-          curl
+          python3-venv \
+          zip \
+          unzip \
+          openjdk-17-jdk \
+          autoconf \
+          libtool \
+          pkg-config \
+          zlib1g-dev \
+          libncurses5-dev \
+          libncursesw5-dev \
+          libtcl8.6 \
+          libsqlite3-0 \
+          libsqlite3-dev \
+          libc6-dev \
+          wget
 
-    - name: Install Android SDK and Build-Tools
+    - name: Install Android SDK
       run: |
-      run: |
-        # Crear directorio para Android SDK
-        mkdir -p $HOME/android-sdk
+        # Crear directorios
+        mkdir -p android-sdk
+        cd android-sdk
         
-        # Descargar Command Line Tools
+        # Descargar Android Command Line Tools
         wget -q https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip
-        unzip -q commandlinetools-linux-*.zip -d $HOME/android-sdk
+        unzip -q commandlinetools-linux-*.zip
+        mkdir -p cmdline-tools
+        mv cmdline-tools cmdline-tools/latest
         
-        # Organizar la estructura de directorios CORRECTAMENTE
-        mkdir -p $HOME/android-sdk/cmdline-tools/latest
-        mv $HOME/android-sdk/cmdline-tools/* $HOME/android-sdk/cmdline-tools/latest/ 2>/dev/null || true
+        # Configurar entorno
+        echo "ANDROID_SDK_ROOT=$(pwd)" >> $GITHUB_ENV
+        echo "ANDROID_HOME=$(pwd)" >> $GITHUB_ENV
+        echo "$(pwd)/cmdline-tools/latest/bin" >> $GITHUB_PATH
         
-        # Configurar variables de entorno
-        echo "ANDROID_SDK_ROOT=$HOME/android-sdk" >> $GITHUB_ENV
-        echo "ANDROID_HOME=$HOME/android-sdk" >> $GITHUB_ENV
-        echo "$HOME/android-sdk/cmdline-tools/latest/bin" >> $GITHUB_PATH
+        # Aceptar licencias
+        mkdir -p licenses
+        echo "24333f8a63b6825ea9c5514f83c2829b004d1fee" > licenses/android-sdk-license
+        echo "84831b9409646a918e30573bab4c9c91346d8abd" > licenses/android-sdk-preview-license
         
-        # Aceptar licencias automáticamente
-        mkdir -p $HOME/android-sdk/licenses
-        echo "24333f8a63b6825ea9c5514f83c2829b004d1fee" > $HOME/android-sdk/licenses/android-sdk-license
-        echo "84831b9409646a918e30573bab4c9c91346d8abd" > $HOME/android-sdk/licenses/android-sdk-preview-license
+        # Instalar componentes
+        yes | ./cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null 2>&1
+        ./cmdline-tools/latest/bin/sdkmanager --install "platform-tools" "platforms;android-33" "build-tools;34.0.0"
         
-        # Instalar componentes necesarios
-        $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager --install "platform-tools" "platforms;android-33" "build-tools;34.0.0" --sdk_root=$HOME/android-sdk
-        
-        # Verificar instalación
-        echo "=== Verificando instalación ==="
-        ls -la $HOME/android-sdk/build-tools/34.0.0/ || echo "Build tools no instalados aún"
-        # Crear directorio para Android SDK
-        mkdir -p $HOME/android-sdk
-        
-        # Descargar Command Line Tools
-        wget -q https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip
-        unzip -q commandlinetools-linux-*.zip -d $HOME/android-sdk
-        mv $HOME/android-sdk/cmdline-tools $HOME/android-sdk/cmdline-tools/latest
-        
-        # Configurar variables de entorno
-        echo "ANDROID_SDK_ROOT=$HOME/android-sdk" >> $GITHUB_ENV
-        echo "ANDROID_HOME=$HOME/android-sdk" >> $GITHUB_ENV
-        echo "$HOME/android-sdk/cmdline-tools/latest/bin" >> $GITHUB_PATH
-        
-        # Aceptar licencias automáticamente
-        mkdir -p $HOME/android-sdk/licenses
-        echo "24333f8a63b6825ea9c5514f83c2829b004d1fee" > $HOME/android-sdk/licenses/android-sdk-license
-        echo "84831b9409646a918e30573bab4c9c91346d8abd" > $HOME/android-sdk/licenses/android-sdk-preview-license
-        
-        # Instalar componentes necesarios
-        $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager --install "platform-tools" "platforms;android-33" "build-tools;34.0.0" --sdk_root=$HOME/android-sdk
-        
-        # Verificar instalación
-        echo "=== Verificando instalación ==="
-        ls -la $HOME/android-sdk/build-tools/34.0.0/
-        echo "AIDL path: $HOME/android-sdk/build-tools/34.0.0/aidl"
+        # Verificar
+        echo "=== Android SDK instalado ==="
+        ls -la build-tools/34.0.0/
 
     - name: Install Python dependencies
       run: |
@@ -95,15 +83,8 @@ jobs:
 
     - name: Build APK with Buildozer
       env:
-        ANDROID_SDK_ROOT: $HOME/android-sdk
-        ANDROID_HOME: $HOME/android-sdk
         JAVA_HOME: /usr/lib/jvm/java-17-openjdk-amd64
       run: |
-        echo "=== Variables de entorno ==="
-        echo "ANDROID_HOME: $ANDROID_HOME"
-        echo "JAVA_HOME: $JAVA_HOME"
-        echo "PATH: $PATH"
-        
         buildozer -v android debug
 
     - name: Upload APK
