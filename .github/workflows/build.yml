@@ -44,108 +44,89 @@ jobs:
           libc6-dev \
           wget
 
-    - name: Install Android SDK (PROVEN METHOD)
-      run: |
-        echo "=== INSTALACIÓN CONFIABLE DE ANDROID SDK ==="
-        
-        # Método 1: Instalar Android SDK desde repositorio
-        sudo apt-get install -y android-sdk
-        
-        # Si el método 1 falla, usar método 2 alternativo
-        if ! command -v aidl &> /dev/null; then
-          echo "Método 1 falló, intentando método alternativo..."
-          
-          # Descargar Android SDK directamente
-          wget -q https://dl.google.com/android/repository/sdk-tools-linux-4333796.zip
-          mkdir -p android-sdk
-          unzip -q sdk-tools-linux-*.zip -d android-sdk
-          
-          # Configurar entorno
-          echo "ANDROID_HOME=$PWD/android-sdk" >> $GITHUB_ENV
-          echo "ANDROID_SDK_ROOT=$PWD/android-sdk" >> $GITHUB_ENV
-          echo "$PWD/android-sdk/tools/bin" >> $GITHUB_PATH
-          echo "$PWD/android-sdk/build-tools/34.0.0" >> $GITHUB_PATH
-          
-          # Aceptar licencias
-          mkdir -p android-sdk/licenses
-          echo "24333f8a63b6825ea9c5514f83c2829b004d1fee" > android-sdk/licenses/android-sdk-license
-          
-          # Instalar build-tools usando método directo
-          android-sdk/tools/bin/sdkmanager --install "build-tools;34.0.0" --sdk_root=$PWD/android-sdk
-        fi
-        
-        # Verificar AIDL explícitamente
-        echo "=== BUSCANDO AIDL ==="
-        find /usr -name "aidl" 2>/dev/null | head -5 || true
-        find $HOME -name "aidl" 2>/dev/null | head -5 || true
-        find /opt -name "aidl" 2>/dev/null | head -5 || true
-        
-        echo "=== INSTALANDO AIDL MANUALMENTE SI ES NECESARIO ==="
-        # Instalar aidl desde paquete si existe
-        sudo apt-get install -y aidl-utils 2>/dev/null || echo "aidl-utils no disponible"
-        
-        # Crear symlink si encontramos aidl
-        if find /usr -name "aidl" 2>/dev/null | grep -q aidl; then
-          AIDL_PATH=$(find /usr -name "aidl" 2>/dev/null | head -1)
-          echo "AIDL encontrado en: $AIDL_PATH"
-          sudo ln -sf $AIDL_PATH /usr/local/bin/aidl 2>/dev/null || true
-        fi
-
-    - name: Install Python dependencies
+    - name: Install Buildozer and dependencies
       run: |
         python -m pip install --upgrade pip setuptools wheel
         pip install Cython==0.29.36
         pip install buildozer==1.5.0
         pip install -r requirements.txt
 
-    - name: Build APK with Buildozer (AIDL FIX)
+    - name: Build APK with Buildozer (SIMPLE VERSION)
       run: |
-        echo "=== CONFIGURANDO BUILD ENTORNO ==="
+        echo "=== CONFIGURACIÓN SIMPLIFICADA ==="
         
-        # Forzar variables de entorno para Buildozer
+        # Configurar entorno mínimo
         export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
         
-        # Intentar múltiples métodos para encontrar Android SDK
-        if [ -d "$HOME/android-sdk" ]; then
-          export ANDROID_HOME="$HOME/android-sdk"
-        elif [ -d "/usr/lib/android-sdk" ]; then
-          export ANDROID_HOME="/usr/lib/android-sdk"
-        elif [ -d "/opt/android-sdk" ]; then
-          export ANDROID_HOME="/opt/android-sdk"
-        else
-          # Crear directorio Android SDK mínimo
-          mkdir -p ~/android-sdk/build-tools/34.0.0
-          export ANDROID_HOME="$HOME/android-sdk"
-          echo "⚠️ Android SDK no encontrado, usando directorio mínimo"
-        fi
+        # Verificar archivos
+        echo "Archivos en el directorio:"
+        ls -la
         
-        export ANDROID_SDK_ROOT="$ANDROID_HOME"
+        echo "Contenido de buildozer.spec:"
+        head -50 buildozer.spec
         
-        echo "JAVA_HOME: $JAVA_HOME"
-        echo "ANDROID_HOME: $ANDROID_HOME"
-        
-        # Verificar si aidl está disponible
-        echo "=== VERIFICANDO AIDL ==="
-        which aidl || echo "aidl no encontrado en PATH"
-        find $ANDROID_HOME -name "aidl" 2>/dev/null || echo "Buscando aidl en $ANDROID_HOME..."
-        
-        # Si no hay aidl, crear un dummy (solo para pruebas)
-        if ! which aidl && ! find $ANDROID_HOME -name "aidl" 2>/dev/null; then
-          echo "⚠️ Creando aidl dummy para continuar..."
-          mkdir -p $ANDROID_HOME/build-tools/34.0.0
-          echo '#!/bin/bash
-          echo "aidl dummy - Skipping AIDL compilation"
-          exit 0' > $ANDROID_HOME/build-tools/34.0.0/aidl
-          chmod +x $ANDROID_HOME/build-tools/34.0.0/aidl
-          export PATH="$ANDROID_HOME/build-tools/34.0.0:$PATH"
-        fi
-        
-        # Compilar
+        # Compilar en modo verbose
         echo "=== INICIANDO COMPILACIÓN ==="
-        buildozer -v android debug 2>&1 | tail -100
+        buildozer init
+        buildozer -v android debug
+        
+        echo "=== BUSCANDO ARCHIVOS GENERADOS ==="
+        find . -name "*.apk" -type f 2>/dev/null
+        find . -name "*.apk" -type f 2>/dev/null | xargs -I {} ls -la {} 2>/dev/null || true
+        
+        # Verificar directorio bin
+        echo "Contenido de bin/:"
+        ls -la bin/ 2>/dev/null || echo "Directorio bin/ no existe"
+        
+        # Verificar directorio .buildozer
+        echo "Contenido de .buildozer/android/platform/build-*:"
+        find .buildozer -name "*.apk" -type f 2>/dev/null || echo "No hay APKs en .buildozer"
 
-    - name: Upload APK
+    - name: Find and Upload APK
+      run: |
+        echo "=== BUSCANDO APK PARA SUBIR ==="
+        
+        # Buscar APK en múltiples ubicaciones posibles
+        APK_PATHS=()
+        
+        # 1. En bin/ (ubicación estándar)
+        if [ -d "bin" ]; then
+          APK_PATHS+=(bin/*.apk)
+        fi
+        
+        # 2. En .buildozer/ (ubicación alternativa)
+        APK_PATHS+=(.buildozer/android/platform/build-*/*/bin/*.apk)
+        
+        # 3. Buscar en todo el proyecto
+        APK_PATHS+=($(find . -name "*.apk" -type f 2>/dev/null))
+        
+        echo "Archivos APK encontrados:"
+        for apk in "${APK_PATHS[@]}"; do
+          if [ -f "$apk" ]; then
+            echo "✅ $apk - $(ls -lh "$apk" | awk '{print $5}')"
+            # Copiar a ubicación estándar
+            mkdir -p bin
+            cp "$apk" bin/
+          fi
+        done
+        
+        # Mostrar contenido final de bin/
+        echo "Contenido final de bin/:"
+        ls -la bin/ 2>/dev/null || echo "bin/ vacío o no existe"
+
+    - name: Upload APK (with fallback)
       uses: actions/upload-artifact@v4
       with:
         name: apk-debug
-        path: bin/*.apk
+        path: |
+          bin/*.apk
+          .buildozer/android/platform/build-*/*/bin/*.apk
+        if-no-files-found: warn
+
+    - name: Debug - List all generated files
+      if: always()
+      run: |
+        echo "=== DEBUG: TODOS LOS ARCHIVOS GENERADOS ==="
+        find . -type f \( -name "*.apk" -o -name "*.aab" \) 2>/dev/null | xargs -I {} ls -la {} 2>/dev/null || true
+        echo "=== DIRECTORIO .buildozer ==="
+        find .buildozer -type f -name "*.apk" 2>/dev/null | head -10
